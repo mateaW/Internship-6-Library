@@ -72,6 +72,9 @@ CREATE TABLE Loans (
 	PenaltyRate INT
 );
 
+ALTER TABLE Loans
+ADD COLUMN Returned BOOLEAN NOT NULL;
+
 
 -- constraints
 ALTER TABLE Librarians
@@ -121,3 +124,62 @@ insert into Books (Name, Type, PublicationDate) values
 ('Book1', 'Art Book', '02/01/2020');
 insert into BookCopies (BookID, LibraryID) VALUES
 (1,1);
+
+
+-- procedure to borrow a book
+-- it checks if the book is already borrowed by someone else 
+-- it also checks if the user has already borrowed 3 books from that library
+CREATE OR REPLACE PROCEDURE LoanBook(book_copy_id INT, user_id INT) AS
+$$
+DECLARE
+    book_due_date DATE;
+	book_loan_date DATE;
+	current_loan_count INT;
+	is_book_loaned BOOLEAN;
+	library_id INT;
+BEGIN
+    -- checks if the book is available
+    SELECT EXISTS (
+        SELECT 1
+        FROM Loans l
+        INNER JOIN BookCopies bc ON l.BookCopiesID = bc.BookCopiesID
+        WHERE bc.BookCopiesID = book_copy_id AND l.Returned IS FALSE) 
+			INTO is_book_loaned;
+
+    -- raise exception if the book is already borrowed
+    IF is_book_loaned THEN
+        RAISE EXCEPTION 'Book is already borrowed.';
+	ELSE
+		-- checks number of borrowed books in this library
+        SELECT LibraryID
+        INTO library_id
+        FROM BookCopies
+        WHERE BookCopyID = book_copy_id;
+
+        SELECT COUNT(*)
+        INTO current_loan_count
+        FROM Loans l
+        INNER JOIN BookCopies bc ON l.BookCopyID = bc.BookCopyID
+        WHERE l.UserID = user_id AND bc.LibraryID = library_id;
+
+		IF current_loan_count < 3 THEN
+		-- it is assumed that the user borrowed the book today, 
+		-- and the due date is set in 20 days
+		book_due_date := CURRENT_DATE + INTERVAL '20 days';
+		book_loan_date := CURRENT_DATE;
+
+		-- Insert into Loans table
+		INSERT INTO Loans(BookCopyID, UserID, LoanDate, DueDate, Returned)
+		VALUES (book_copy_id, user_id, book_loan_date, book_due_date, FALSE);
+		RAISE NOTICE 'Book borrowed successfully. Due date: %', book_due_date;
+
+		ELSE
+			RAISE EXCEPTION 'User has already borrowed 3 books in this library.';
+		END IF;
+	END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Error borrowing book: %', SQLERRM;
+END;
+$$
+LANGUAGE plpgsql;
