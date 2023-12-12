@@ -52,12 +52,24 @@ CREATE TABLE BookCopies (
 	LibraryID INT REFERENCES Libraries(LibraryID)
 );
 
+ALTER TABLE BookCopies
+RENAME COLUMN BookCopiesID TO BookCopyID;
+
 CREATE TABLE Users (
 	UserID SERIAL PRIMARY KEY,
 	FirstName VARCHAR(100) NOT NULL,
 	LastName VARCHAR(100) NOT NULL,
 	Birth DATE NOT NULL,
 	Gender VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE Loans (
+	LoanID SERIAL PRIMARY KEY,
+	BookCopyID INT REFERENCES BookCopies(BookCopyID),
+	UserID INT REFERENCES Users(UserID),
+	LoanDate DATE NOT NULL,
+	DueDate DATE NOT NULL,
+	PenaltyRate INT
 );
 
 
