@@ -1,0 +1,61 @@
+CREATE TABLE States (
+	StateID SERIAL PRIMARY KEY,
+	Name VARCHAR(100) NOT NULL,
+	Population INT NOT NULL,
+	AverageWage INT NOT NULL
+);
+
+CREATE TABLE Libraries (
+	LibraryID SERIAL PRIMARY KEY,
+	Name VARCHAR(100) NOT NULL,
+	OpeningTime TIME,
+	ClosingTime TIME
+);
+
+CREATE TABLE Librarians (
+	LibrarianID SERIAL PRIMARY KEY,
+	LibraryID INT REFERENCES(Libraries(LibraryID)),
+	FirstName VARCHAR(100) NOT NULL,
+	LastName VARCHAR(100) NOT NULL,
+	Birth DATE NOT NULL,
+	Gender VARCHAR(20) NOT NULL,
+);
+
+CREATE TABLE Authors (
+	AuthorID SERIAL PRIMARY KEY,
+	FirstName VARCHAR(100) NOT NULL,
+	LastName VARCHAR(100) NOT NULL,
+	Birth DATE NOT NULL,
+	Gender VARCHAR(20) NOT NULL,
+	StateID INT REFERENCES(States(StateID)),
+	YearOfDeath DATE,
+	FieldOfStudy VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE Books (
+	BookID SERIAL PRIMARY KEY,
+	Name VARCHAR(100) NOT NULL,
+	Type VARCHAR(20) NOT NULL,
+	PublicationDate DATE NOT NULL
+);
+
+CREATE TABLE BooksAuthors (
+	BookID INT REFERENCES(Books(BookID)),
+	AuthorID INT REFERENCES(Authors(AuthorID)),
+	AuthorType VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE BookCopies (
+	BookCopiesID SERIAL PRIMARY KEY,
+	BookCode VARCHAR(10) UNIQUE NOT NULL,
+	BookID INT REFERENCES(Books(BookID)),
+	LibraryID INT REFERENCES(Libraries(LibraryID))
+);
+
+CREATE TABLE Users (
+	UserID SERIAL PRIMARY KEY,
+	FirstName VARCHAR(100) NOT NULL,
+	LastName VARCHAR(100) NOT NULL,
+	Birth DATE NOT NULL,
+	Gender VARCHAR(20) NOT NULL
+);
