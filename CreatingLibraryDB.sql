@@ -82,4 +82,30 @@ ALTER TABLE BooksAuthors
 ADD CONSTRAINT CK_AuthorType
 CHECK (AuthorType IN ('Main Author', 'Co-Author'));
 
+
 -- function that generates book codes
+CREATE OR REPLACE FUNCTION generate_book_code()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.BookCode := SUBSTRING(
+    MD5(RANDOM()::TEXT || clock_timestamp()::TEXT)::TEXT FROM 1 FOR 10
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- creating trigger
+CREATE TRIGGER before_bookCopy_insert
+BEFORE INSERT ON BookCopies
+FOR EACH ROW
+EXECUTE FUNCTION generate_book_code();
+
+-- testing the function above if it will generate a random code to an added book copy
+insert into States(Name,Population,AverageWage) values 
+('Hrvatska', 4000000, 1100);
+insert into Libraries(Name, OpeningTime, ClosingTime) values
+('Knjižnica Marka Marulića', '08:00:00', '20:00:00');
+insert into Books (Name, Type, PublicationDate) values
+('Book1', 'Art Book', '02/01/2020');
+insert into BookCopies (BookID, LibraryID) VALUES
+(1,1);
