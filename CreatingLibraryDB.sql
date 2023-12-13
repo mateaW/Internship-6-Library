@@ -75,6 +75,8 @@ CREATE TABLE Loans (
 ALTER TABLE Loans
 ADD COLUMN Returned BOOLEAN NOT NULL;
 
+ALTER TABLE Loans
+ADD COLUMN Extended BOOLEAN NOT NULL;
 
 -- constraints
 ALTER TABLE Librarians
@@ -169,8 +171,8 @@ BEGIN
 		book_loan_date := CURRENT_DATE;
 
 		-- insert into Loans table
-		INSERT INTO Loans(BookCopyID, UserID, LoanDate, DueDate, Returned)
-		VALUES (book_copy_id, user_id, book_loan_date, book_due_date, FALSE);
+		INSERT INTO Loans(BookCopyID, UserID, LoanDate, DueDate, Returned, Extended)
+		VALUES (book_copy_id, user_id, book_loan_date, book_due_date, FALSE, FALSE);
 		RAISE NOTICE 'Book borrowed successfully. Due date: %', book_due_date;
 
 		ELSE
@@ -254,4 +256,42 @@ EXCEPTION
 END;
 $$
 LANGUAGE plpgsql;
+
+
+-- procedure to extend the book
+CREATE OR REPLACE PROCEDURE ExtendLoan(loan_id INT) AS
+$$
+DECLARE
+    current_due_date DATE;
+    new_due_date DATE;
+	is_extended BOOLEAN;
+BEGIN
+    SELECT DueDate, Extended INTO current_due_date, is_extended
+    FROM Loans
+    WHERE LoanID = loan_id;
+
+	-- check if the book has already been extended
+	IF NOT is_extended THEN
+    	new_due_date := current_due_date + INTERVAL '60 days';
+		is_extended = TRUE;
+		
+		UPDATE Loans
+		SET DueDate = new_due_date,
+			Extended = is_extended
+		WHERE LoanID = loan_id;
+        RAISE NOTICE 'Loan extended successfully. New due date: %', new_due_date;
+		
+    ELSE
+        RAISE EXCEPTION 'Cannot extend loan more than 1 time.';
+    END IF;
+	
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE EXCEPTION 'Loan with ID % not found.', loan_id;
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Error extending loan: %', SQLERRM;
+END;
+$$
+LANGUAGE plpgsql;
+
 	
