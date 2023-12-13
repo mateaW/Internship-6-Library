@@ -168,7 +168,7 @@ BEGIN
 		book_due_date := CURRENT_DATE + INTERVAL '20 days';
 		book_loan_date := CURRENT_DATE;
 
-		-- Insert into Loans table
+		-- insert into Loans table
 		INSERT INTO Loans(BookCopyID, UserID, LoanDate, DueDate, Returned)
 		VALUES (book_copy_id, user_id, book_loan_date, book_due_date, FALSE);
 		RAISE NOTICE 'Book borrowed successfully. Due date: %', book_due_date;
@@ -183,3 +183,75 @@ EXCEPTION
 END;
 $$
 LANGUAGE plpgsql;
+
+
+-- procedure to return a book, it calculates users penalty rate if he has one
+CREATE OR REPLACE PROCEDURE ReturnBook(loan_id INT) AS
+$$
+DECLARE
+    days_overdue INT;
+    penalty_rate DECIMAL;
+    is_literaryBook BOOLEAN;
+BEGIN 
+	-- check if there is delay
+	SELECT 
+		CASE 
+			WHEN CURRENT_DATE > DueDate THEN 
+				CURRENT_DATE - DueDate
+			ELSE 
+				0 
+		END
+	INTO days_overdue
+    FROM Loans
+    WHERE LoanID = loan_id;
+	
+	-- check if the book is literary book
+	SELECT TRUE
+    INTO is_literaryBook
+    FROM Books b
+    INNER JOIN BookCopies bc ON b.BookID = bc.BookID
+    INNER JOIN Loans l ON bc.BookCopyID = l.BookCopyID
+    WHERE l.LoanID = loan_id AND b.Type = 'Literary Book';
+	
+	-- calculating penalty rate
+	SELECT 
+        CASE 
+			-- summer
+            WHEN EXTRACT('month' FROM CURRENT_DATE) BETWEEN 6 AND 9 THEN 
+                CASE 
+                    WHEN EXTRACT('dow' FROM DueDate) BETWEEN 1 AND 5 THEN 
+                        CASE 
+							-- working days
+                            WHEN is_literaryBook THEN 50  
+                            ELSE 30  
+                        END
+					-- weekend
+                    ELSE 20
+                END
+			-- not summer
+            ELSE 
+                CASE 
+                    WHEN EXTRACT('dow' FROM DueDate) BETWEEN 1 AND 5 THEN 
+                        CASE 
+                            WHEN is_literaryBook THEN 50
+                            ELSE 40  
+                        END
+                    ELSE 20
+                END
+        END
+    INTO penalty_rate;
+	
+	-- insert into Loans table
+	UPDATE Loans
+    SET Returned = TRUE,
+        PenaltyRate = penalty_rate
+    WHERE LoanID = loan_id;
+
+    RAISE NOTICE 'Book returned successfully. Penalty rate: %', penalty_rate;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Error returning book: %', SQLERRM;
+END;
+$$
+LANGUAGE plpgsql;
+	
