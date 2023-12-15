@@ -117,16 +117,6 @@ BEFORE INSERT ON BookCopies
 FOR EACH ROW
 EXECUTE FUNCTION generate_book_code();
 
--- testing the function above if it will generate a random code to an added book copy
-insert into States(Name,Population,AverageWage) values 
-('Hrvatska', 4000000, 1100);
-insert into Libraries(Name, OpeningTime, ClosingTime) values
-('Knjižnica Marka Marulića', '08:00:00', '20:00:00');
-insert into Books (Name, Type, PublicationDate) values
-('Book1', 'Art Book', '02/01/2020');
-insert into BookCopies (BookID, LibraryID) VALUES
-(1,1);
-
 
 -- procedure to borrow a book
 -- it checks if the book is already borrowed by someone else 
