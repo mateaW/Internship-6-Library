@@ -1,5 +1,5 @@
 -- inserting loans
--- first checking the procedures
+-- first testing the procedures
 
 CALL LoanBook(1,1);
 CALL LoanBook(26,1);
