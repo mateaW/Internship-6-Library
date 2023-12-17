@@ -10,6 +10,21 @@ JOIN BooksAuthors ba ON b.BookID = ba.BookID
 JOIN Authors a ON a.AuthorID = ba.AuthorID
 WHERE b.Type = 'Science Book' AND ba.AuthorType = 'Main Author';
 
+-- 3.
+SELECT
+  b.Name,
+  l.LoanDate
+FROM
+  Loans l
+JOIN
+  BookCopies bc ON bc.BookCopyID = l.BookCopyID
+JOIN
+  Books b ON b.BookID = bc.BookID
+WHERE
+  DATE_PART('year', l.LoanDate) = 2023 AND DATE_PART('month', l.LoanDate) = 12
+ORDER BY
+  l.LoanDate DESC;
+
 -- 4.
 SELECT l.Name, COUNT(bc.BookCopyID) AS NumberOfBooks
 FROM Libraries l
@@ -17,6 +32,22 @@ JOIN BookCopies bc on bc.LibraryID = l.LibraryID
 GROUP BY l.LibraryID, l.Name
 ORDER BY NumberOfBooks DESC
 LIMIT 3;
+
+-- 5.
+SELECT b.Name, COUNT(DISTINCT l.UserID) AS NumberOfReaders
+FROM Loans l
+JOIN
+  BookCopies bc ON bc.BookCopyID = l.BookCopyID
+JOIN
+  Books b ON b.BookID = bc.BookID
+GROUP BY b.Name
+ORDER BY NumberOfReaders DESC;
+
+-- 6.
+SELECT DISTINCT u.FirstName, u.LastName
+FROM Users u
+JOIN Loans l ON l.UserID = u.UserID
+WHERE l.Returned = FALSE;
 
 -- 7.
 SELECT DISTINCT a.FirstName, a.LastName
@@ -35,14 +66,35 @@ WHERE b.Type = 'Art Book'
 GROUP BY s.Name
 ORDER BY (SELECT COUNT(*) from Authors a WHERE a.YearOfDeath IS NULL) DESC;
 
--- 11.
+-- 9.
+SELECT
+  a.FirstName,
+  a.LastName,
+  b.Type,
+  COUNT(*) AS NumberOfBorrowings
+FROM
+  Authors a
+JOIN
+  BooksAuthors ba ON a.AuthorID = ba.AuthorID
+JOIN
+  Books b ON ba.BookID = b.BookID
+JOIN
+  BookCopies bc ON b.BookID = bc.BookID
+JOIN
+  Loans l ON bc.BookCopyID = l.BookCopyID
+GROUP BY
+  a.FirstName, a.LastName, b.Type
+ORDER BY
+  NumberOfBorrowings DESC;
+  
+-- 10.
 SELECT a.FirstName, a.LastName, b.Name, MIN(b.PublicationDate) AS PublicationDate
 FROM Authors a
 JOIN BooksAuthors ba ON ba.AuthorID = a.AuthorID
 JOIN Books b ON b.BookID = ba.BookID
 GROUP BY a.FirstName, a.LastName, b.Name;
 
--- 12.
+-- 11.
 WITH RankedBooks AS (
   SELECT
     s.Name AS State,
@@ -64,7 +116,49 @@ FROM
 WHERE
   BookRank = 2;
   
--- 15.
+-- 12.
+SELECT
+  b.Name,
+  COUNT(*) AS ActiveBorrowings
+FROM
+  Books b
+JOIN
+  BookCopies bc ON bc.BookID = b.BookID
+JOIN
+  Loans l ON l.BookCopyID = bc.BookCopyID 
+WHERE l.Returned = FALSE
+GROUP BY
+  b.Name
+HAVING COUNT(*) >= 10;
+
+-- 13.
+SELECT
+  State,
+  AVG(AverageBorrowingsPerCopy) AS AverageBorrowingsPerCopy
+FROM (
+  SELECT
+    s.Name AS State,
+    bc.BookCopyID,
+    COUNT(l.LoanID) / COUNT(DISTINCT bc.BookCopyID) AS AverageBorrowingsPerCopy
+  FROM
+    BookCopies bc
+  JOIN
+    Loans l ON l.BookCopyID = bc.BookCopyID
+  JOIN
+    Books b ON b.BookID = bc.BookID
+  JOIN
+    BooksAuthors ba ON ba.BookID = b.BookID
+  JOIN
+    Authors a ON a.AuthorID = ba.AuthorID
+  JOIN
+    States s ON s.StateID = a.StateID
+  GROUP BY
+    s.Name, bc.BookCopyID
+) AS Subquery
+GROUP BY
+  State;
+
+-- 14.
 WITH AuthorCounts AS (
   SELECT
     a.FieldOfStudy,
@@ -93,7 +187,7 @@ WHERE
 ORDER BY
   DecadeOfBirth DESC;
 
--- 16.
+-- 15.
 SELECT
   Subquery.FirstName,
   Subquery.LastName,
