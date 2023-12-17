@@ -134,8 +134,8 @@ BEGIN
     SELECT EXISTS (
         SELECT 1
         FROM Loans l
-        INNER JOIN BookCopies bc ON l.BookCopiesID = bc.BookCopiesID
-        WHERE bc.BookCopiesID = book_copy_id AND l.Returned IS FALSE) 
+        INNER JOIN BookCopies bc ON l.BookCopyID = bc.BookCopyID
+        WHERE bc.BookCopyID = book_copy_id AND l.Returned IS FALSE) 
 			INTO is_book_loaned;
 
     -- raise exception if the book is already borrowed
@@ -178,13 +178,34 @@ LANGUAGE plpgsql;
 
 
 -- procedure to return a book, it calculates users penalty rate if he has one
+-- it checks if the book is already returned
 CREATE OR REPLACE PROCEDURE ReturnBook(loan_id INT) AS
 $$
 DECLARE
+	due_date DATE;
     days_overdue INT;
-    penalty_rate DECIMAL;
+    penalty_rate REAL := 0;
     is_literaryBook BOOLEAN;
+	is_already_returned BOOLEAN;
 BEGIN 
+    -- check loan_id
+    PERFORM 1 FROM Loans WHERE LoanID = loan_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Loan with ID % not found.', loan_id;
+    END IF;
+	
+	-- check if the book has already been returned
+    SELECT Returned INTO is_already_returned
+    FROM Loans
+    WHERE LoanID = loan_id;
+    IF is_already_returned THEN
+        RAISE EXCEPTION 'Book with Loan ID % has already been returned.', loan_id;
+    END IF;
+	
+	SELECT DueDate INTO due_date
+	FROM Loans
+    WHERE LoanID = loan_id;
+	
 	-- check if there is delay
 	SELECT 
 		CASE 
@@ -194,7 +215,7 @@ BEGIN
 				0 
 		END
 	INTO days_overdue
-    FROM Loans
+    FROM Loans l
     WHERE LoanID = loan_id;
 	
 	-- check if the book is literary book
@@ -205,34 +226,35 @@ BEGIN
     INNER JOIN Loans l ON bc.BookCopyID = l.BookCopyID
     WHERE l.LoanID = loan_id AND b.Type = 'Literary Book';
 	
-	-- calculating penalty rate
-	SELECT 
-        CASE 
-			-- summer
-            WHEN EXTRACT('month' FROM CURRENT_DATE) BETWEEN 6 AND 9 THEN 
-                CASE 
-                    WHEN EXTRACT('dow' FROM DueDate) BETWEEN 1 AND 5 THEN 
-                        CASE 
-							-- working days
-                            WHEN is_literaryBook THEN 50  
-                            ELSE 30  
-                        END
+	-- calculate penalty rate
+	IF days_overdue > 0 THEN
+		FOR i IN 1..days_overdue LOOP
+			-- summer time
+			IF EXTRACT(MONTH FROM due_date + i) BETWEEN 6 AND 9 THEN 
+				IF EXTRACT(DOW FROM due_date + i) BETWEEN 1 AND 5 THEN 
+					-- working days
+					penalty_rate := penalty_rate + 0.3; 
+				ELSE
 					-- weekend
-                    ELSE 20
-                END
-			-- not summer
-            ELSE 
-                CASE 
-                    WHEN EXTRACT('dow' FROM DueDate) BETWEEN 1 AND 5 THEN 
-                        CASE 
-                            WHEN is_literaryBook THEN 50
-                            ELSE 40  
-                        END
-                    ELSE 20
-                END
-        END
-    INTO penalty_rate;
-	
+					penalty_rate := penalty_rate + 0.2; 
+				END IF;
+			-- not summer time
+			ELSE 
+				IF is_literaryBook THEN
+					penalty_rate := penalty_rate + 0.5;
+				ELSE
+					-- working days
+					IF EXTRACT(DOW FROM due_date + i) BETWEEN 1 AND 5 THEN
+						penalty_rate := penalty_rate + 0.4; 
+					ELSE
+						-- weekend
+						penalty_rate := penalty_rate + 0.2; 
+					END IF;
+				END IF;
+			END IF;
+		END LOOP;
+	END IF;
+
 	-- insert into Loans table
 	UPDATE Loans
     SET Returned = TRUE,
@@ -249,6 +271,7 @@ LANGUAGE plpgsql;
 
 
 -- procedure to extend the book
+-- book can be extended only once
 CREATE OR REPLACE PROCEDURE ExtendLoan(loan_id INT) AS
 $$
 DECLARE
@@ -256,6 +279,12 @@ DECLARE
     new_due_date DATE;
 	is_extended BOOLEAN;
 BEGIN
+    -- check loan_id
+    PERFORM 1 FROM Loans WHERE LoanID = loan_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Loan with ID % not found.', loan_id;
+    END IF;
+	
     SELECT DueDate, Extended INTO current_due_date, is_extended
     FROM Loans
     WHERE LoanID = loan_id;
@@ -263,25 +292,28 @@ BEGIN
 	-- check if the book has already been extended
 	IF NOT is_extended THEN
     	new_due_date := current_due_date + INTERVAL '60 days';
-		is_extended = TRUE;
-		
+		is_extended := TRUE;
+		-- insert updates into Loans table
 		UPDATE Loans
 		SET DueDate = new_due_date,
 			Extended = is_extended
 		WHERE LoanID = loan_id;
         RAISE NOTICE 'Loan extended successfully. New due date: %', new_due_date;
-		
     ELSE
         RAISE EXCEPTION 'Cannot extend loan more than 1 time.';
     END IF;
 	
 EXCEPTION
-    WHEN NO_DATA_FOUND THEN
-        RAISE EXCEPTION 'Loan with ID % not found.', loan_id;
     WHEN OTHERS THEN
         RAISE EXCEPTION 'Error extending loan: %', SQLERRM;
 END;
 $$
 LANGUAGE plpgsql;
+
+
+
+
+
+
 
 	
